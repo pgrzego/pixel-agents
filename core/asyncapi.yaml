@@ -100,6 +100,8 @@ components:
         - $ref: '#/components/schemas/AgentTeamInfo'
         # Context window
         - $ref: '#/components/schemas/AgentContextUsage'
+        # Session title
+        - $ref: '#/components/schemas/AgentTitle'
         # Layout
         - $ref: '#/components/schemas/LayoutLoaded'
         # Assets
@@ -476,6 +478,23 @@ components:
           type: integer
         maxContextTokens:
           type: integer
+
+    AgentTitle:
+      description: |
+        The agent's session title as its CLI shows it (a rename wins over the
+        generated title), read from its transcript: sent when it changes and
+        on connect. No `title` = the session has none (yet, or no longer after
+        a /clear); the office then labels the agent with its Directory.
+      type: object
+      additionalProperties: false
+      required: [type, id]
+      properties:
+        type:
+          const: agentTitle
+        id:
+          type: integer
+        title:
+          type: string
 
     LayoutLoaded:
       description: |

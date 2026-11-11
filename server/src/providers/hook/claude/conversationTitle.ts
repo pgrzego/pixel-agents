@@ -43,6 +43,18 @@ export function conversationTitle(transcriptPath: string): string | undefined {
   }
 }
 
+/** The records conversationTitle reads. */
+const TITLE_RECORD_TYPES: ReadonlySet<string> = new Set([
+  'custom-title',
+  'ai-title',
+  'last-prompt',
+]);
+
+/** A record that can change what conversationTitle returns. */
+export function isTitleRecord(record: unknown): boolean {
+  return isRecord(record) && typeof record.type === 'string' && TITLE_RECORD_TYPES.has(record.type);
+}
+
 interface Titles {
   custom?: string;
   ai?: string;

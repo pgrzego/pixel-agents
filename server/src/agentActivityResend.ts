@@ -90,5 +90,8 @@ export function resendAgentActivity(
         maxContextTokens: agent.maxContextTokens,
       });
     }
+
+    // 6. Session title (a resync drops the office's, so a missed clear can't linger)
+    if (agent.title) send({ type: 'agentTitle', id, title: agent.title });
   }
 }

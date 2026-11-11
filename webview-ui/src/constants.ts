@@ -238,6 +238,10 @@ export const TOOL_OVERLAY_VERTICAL_OFFSET = 32;
 /** CSS px between the label's bottom and the sprite's top edge (or the bubble
  *  over it). Negative: most hair stops a little below that edge. */
 export const TOOL_OVERLAY_GAP_PX = -2;
+/** CSS px the session title may take on an agent's label before it is cut with an
+ *  ellipsis: every idle label carries one, and full-length ones overlap their
+ *  neighbours' when labels are always shown. */
+export const TOOL_OVERLAY_TITLE_MAX_WIDTH_PX = 160;
 
 // ── Greeter + Intro bubble ──────────────────────────────────
 /** Reserved character id for the Intro's greeter. Far outside both real agent

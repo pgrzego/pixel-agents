@@ -16,6 +16,7 @@ import {
   TEAM_LEAD_COLOR,
   TEAM_ROLE_COLOR,
   TOOL_OVERLAY_GAP_PX,
+  TOOL_OVERLAY_TITLE_MAX_WIDTH_PX,
   TOOL_OVERLAY_VERTICAL_OFFSET,
 } from '../../constants.js';
 import type { SubagentCharacter } from '../../hooks/useExtensionMessages.js';
@@ -336,9 +337,16 @@ export function ToolOverlay({
                   >
                     {activityText}
                   </span>
-                  {ch.directoryName && (
-                    <span className="text-2xs leading-none overflow-hidden text-ellipsis block">
-                      {ch.directoryName}
+                  {/* The session's title, else the Directory: four agents in one
+                      Directory would all read the same. Cut short; a selected
+                      label (the only one taking the pointer) shows it whole on hover. */}
+                  {(ch.title ?? ch.directoryName) && (
+                    <span
+                      className="text-2xs leading-none overflow-hidden text-ellipsis block"
+                      style={{ maxWidth: TOOL_OVERLAY_TITLE_MAX_WIDTH_PX }}
+                      title={ch.title}
+                    >
+                      {ch.title ?? ch.directoryName}
                     </span>
                   )}
                 </div>

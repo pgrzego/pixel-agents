@@ -112,3 +112,36 @@ test('a turn that ends stands the agent up', () => {
   run(os, 0.1);
   assert.equal(ch.state, CharacterState.IDLE);
 });
+
+test('an idle agent rests in the break room, not at its desk, and goes back to work there', () => {
+  // Two chairs with no PC: 'a' is the agent's own, 'b' is free, so 'b' is the break room.
+  const layout = layoutWithChair();
+  layout.furniture.push({ uid: 'b', type: 'TEST_CHAIR', col: 5, row: 4 });
+  const os = new OfficeState(layout);
+  os.addAgent(1, undefined, undefined, 'a', true);
+  const ch = os.characters.get(1)!;
+
+  // Its turn ends: it stands up; once it has wandered enough, it goes for a rest.
+  os.setAgentActive(1, false);
+  run(os, 0.1);
+  ch.wanderCount = ch.wanderLimit;
+  ch.wanderTimer = 0;
+  run(os, 5);
+  assert.equal(ch.restSeatId, 'b');
+  assert.deepEqual([ch.tileCol, ch.tileRow, ch.state], [5, 4, CharacterState.TYPE]);
+  assert.equal(getCharacterSprite(ch, sprites), sprites.seated[ch.dir]);
+
+  // A newcomer needs a chair and 'b' is the only free one: it is the newcomer's
+  // own now, so the resting agent gets up and walks off it.
+  os.addAgent(2, undefined, undefined, undefined, true);
+  assert.equal(os.characters.get(2)!.seatId, 'b');
+  run(os, 1);
+  assert.equal(ch.restSeatId, null);
+  assert.notDeepEqual([ch.tileCol, ch.tileRow], [5, 4], "off the newcomer's chair");
+
+  // Work comes in: back to its own desk.
+  os.setAgentActive(1, true);
+  run(os, 5);
+  assert.equal(ch.restSeatId, null);
+  assert.deepEqual([ch.tileCol, ch.tileRow, ch.state], [1, 1, CharacterState.TYPE]);
+});
