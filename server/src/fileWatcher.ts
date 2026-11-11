@@ -49,7 +49,7 @@ import { assignPaletteIfNeeded } from './paletteAssigner.js';
 import { pathsMatch } from './pathKey.js';
 import type { SubagentWatch } from './subagentWatch.js';
 import { cancelPermissionTimer, cancelWaitingTimer, clearAgentActivity } from './timerManager.js';
-import { getHookProvider, processTranscriptLine } from './transcriptParser.js';
+import { getHookProvider, processTranscriptLine, refreshAgentTitle } from './transcriptParser.js';
 import type { AgentState } from './types.js';
 
 /** Dismissal tracker instance. Set once at startup via setDismissalTracker().
@@ -111,9 +111,10 @@ export function startFileWatching(
   permissionTimers: Map<number, ReturnType<typeof setTimeout>>,
 ): void {
   // Every watched agent passes through here, so this is the one place that can
-  // give an agent adopted or restored mid-session a context gauge without
-  // replaying its whole transcript.
+  // give an agent adopted or restored mid-session a context gauge and its
+  // title without replaying its whole transcript.
   seedContextUsage(agentId, agents, getHookProvider());
+  refreshAgentTitle(agentId, agents);
 
   // Single polling approach: reliable on all platforms (macOS, Linux, WSL2, Windows).
   // Previously used triple-redundant fs.watch + fs.watchFile + setInterval, but

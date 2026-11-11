@@ -1193,6 +1193,11 @@ export class OfficeState {
     ch.contextReported = true;
   }
 
+  setAgentTitle(id: number, title: string | undefined): void {
+    const ch = this.characters.get(id);
+    if (ch) ch.title = title;
+  }
+
   update(dt: number): void {
     // Furniture animation cycling
     const prevFrame = Math.floor(this.furnitureAnimTimer / FURNITURE_ANIM_INTERVAL_SEC);

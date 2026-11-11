@@ -44,6 +44,21 @@ export function getHookProvider(): HookProvider | null {
   return hookProvider;
 }
 
+/**
+ * Re-read an agent's session title from its transcript and tell the office when
+ * it changed, to none included: a /clear's fresh transcript has no title yet,
+ * and the old one would mislabel it. Read when watching starts
+ * (startFileWatching) and on every record that can change it.
+ */
+export function refreshAgentTitle(agentId: number, agents: AgentStateStore): void {
+  const agent = agents.get(agentId);
+  if (!agent?.jsonlFile || !hookProvider?.conversationTitle) return;
+  const title = hookProvider.conversationTitle(agent.jsonlFile);
+  if (title === agent.title) return;
+  agent.title = title;
+  agents.broadcast({ type: 'agentTitle', id: agentId, title });
+}
+
 /** Called when a lead's tool_result reports an async agent launch. The host
  *  reacts by scanning the lead's subagents/ sidecars and classifying each
  *  spawn by its sidecar name: named -> teammate character, unnamed -> shadow-
@@ -162,6 +177,9 @@ export function processTranscriptLine(
 
     // -- Context window usage (drives every agent's context gauge) --
     updateContextUsage(agentId, agent, agents, record, hookProvider);
+
+    // -- Session title (the agent's label) --
+    if (hookProvider?.isTitleRecord?.(record)) refreshAgentTitle(agentId, agents);
 
     // Resilient content extraction: support both record.message.content and record.content
     // Claude Code may change the JSONL structure across versions

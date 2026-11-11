@@ -1,9 +1,13 @@
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AgentStateStore } from '../src/agentStateStore.js';
 import { claudeProvider } from '../src/providers/hook/claude/claude.js';
 import {
   processTranscriptLine,
+  refreshAgentTitle,
   setHookProvider,
   setTeamSwitchCallback,
 } from '../src/transcriptParser.js';
@@ -347,5 +351,48 @@ describe('transcriptParser: teammate spawn results (new-harness implicit teams)'
     );
     expect(agent.teamName).toBeUndefined();
     expect(agent.isTeamLead).toBeUndefined();
+  });
+});
+
+describe('transcriptParser: session titles (the agent label)', () => {
+  it('reads the title when watching starts, follows renames, and drops it for a fresh transcript', () => {
+    setHookProvider(claudeProvider);
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pixel-agents-title-'));
+    try {
+      const file = path.join(dir, 'session.jsonl');
+      const append = (record: Record<string, unknown>): string => {
+        const line = JSON.stringify(record);
+        fs.appendFileSync(file, line + '\n');
+        return line;
+      };
+      // Claude Desktop names its sessions with custom-title records.
+      append({ type: 'custom-title', customTitle: 'STAR-1793 GAC for Upsell', sessionId: 's' });
+      const agents = new AgentStateStore();
+      const titles: Array<Record<string, unknown>> = [];
+      agents.on('broadcast', (msg) => {
+        if (msg.type === 'agentTitle') titles.push(msg as Record<string, unknown>);
+      });
+      agents.set(1, createTestAgent({ jsonlFile: file }));
+
+      // Adopted mid-session: the title is read from the file, not replayed.
+      refreshAgentTitle(1, agents);
+      expect(titles).toEqual([{ type: 'agentTitle', id: 1, title: 'STAR-1793 GAC for Upsell' }]);
+
+      // A rename arrives as a record; the same title again says nothing new.
+      const rename = append({ type: 'custom-title', customTitle: 'Renamed', sessionId: 's' });
+      processTranscriptLine(1, rename, agents, new Map(), new Map());
+      processTranscriptLine(1, rename, agents, new Map(), new Map());
+      expect(titles).toHaveLength(2);
+      expect(titles[1]).toEqual({ type: 'agentTitle', id: 1, title: 'Renamed' });
+
+      // A /clear's fresh transcript has no title: the label drops the old one.
+      const fresh = path.join(dir, 'fresh.jsonl');
+      fs.writeFileSync(fresh, '');
+      agents.get(1)!.jsonlFile = fresh;
+      refreshAgentTitle(1, agents);
+      expect(titles[2]).toEqual({ type: 'agentTitle', id: 1, title: undefined });
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

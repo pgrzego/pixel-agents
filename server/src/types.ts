@@ -30,6 +30,9 @@ export interface AgentState {
   hadToolsInTurn: boolean;
   /** Directory name — the agent's origin label (only set for multi-root workspaces) */
   directoryName?: string;
+  /** The session's title as the CLI shows it (refreshAgentTitle), read from the
+   *  transcript; the office labels the agent with it over the Directory name. */
+  title?: string;
   /** Timestamp of last JSONL data received (ms since epoch) */
   lastDataAt: number;
   /** Total JSONL lines processed for this agent */

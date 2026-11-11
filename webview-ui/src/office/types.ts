@@ -236,6 +236,10 @@ export interface Character extends Blinker {
   matrixEffectSeeds: number[];
   /** Directory name — the agent's origin label (only set for multi-root workspaces) */
   directoryName?: string;
+  /** The session's title as the CLI shows it (agentTitle); the label shows it in
+   *  place of the Directory name, which tells apart nothing when several agents
+   *  work in one Directory. */
+  title?: string;
   /** Headless agent: adopted from outside the office, so there is no terminal to
    *  focus. Rendered translucent. Teammates and sub-agents are never headless —
    *  clicking them reaches their lead's / parent's terminal. */

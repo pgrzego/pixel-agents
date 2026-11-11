@@ -25,6 +25,7 @@ export type ServerMessage =
   | SubagentToolPermission
   | AgentTeamInfo
   | AgentContextUsage
+  | AgentTitle
   | LayoutLoaded
   | FurnitureAssetsLoaded
   | CharacterProfilesLoaded
@@ -214,6 +215,12 @@ export interface AgentContextUsage {
   id: number;
   contextTokens: number;
   maxContextTokens: number;
+}
+
+export interface AgentTitle {
+  type: 'agentTitle';
+  id: number;
+  title?: string;
 }
 
 export interface LayoutLoaded {

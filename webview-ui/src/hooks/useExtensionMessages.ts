@@ -321,6 +321,7 @@ export function useExtensionMessages(
       for (const id of incoming) {
         os.setAgentTool(id, null);
         os.setAgentActive(id, false);
+        os.setAgentTitle(id, undefined);
       }
     };
 
@@ -905,6 +906,8 @@ export function useExtensionMessages(
         const id = msg.id as number;
         os.setAgentContext(id, msg.contextTokens as number, msg.maxContextTokens as number);
         setAgentContextUsed(id, msg.contextTokens as number, msg.maxContextTokens as number);
+      } else if (msg.type === 'agentTitle') {
+        os.setAgentTitle(msg.id as number, msg.title as string | undefined);
       }
     };
     const unsubscribe = transport.onMessage(handler);

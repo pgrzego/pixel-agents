@@ -214,6 +214,11 @@ export interface HookProvider {
    *  recent conversations; undefined = this provider names no conversations
    *  (and is never asked to resume one). */
   conversationTitle?(transcriptPath: string): string | undefined;
+  /** True for a transcript record that can change what conversationTitle
+   *  returns (a rename, a generated title): the runtime re-reads the title
+   *  then, to keep the agent's label current. Undefined = an agent's title is
+   *  read only when watching its transcript starts. */
+  isTitleRecord?(record: unknown): boolean;
 
   /** Optional account-usage reporting (the office's usage bars). */
   readonly usageBridge?: UsageBridge;
