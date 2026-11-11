@@ -39,7 +39,8 @@ import type {
 } from '../types.js';
 import { CharacterState, Direction, PetState, TILE_SIZE } from '../types.js';
 import { tickBlink } from './blink.js';
-import { createCharacter, restInChair, updateCharacter, updateHelper } from './characters.js';
+import type { BreakRoomSeat } from './characters.js';
+import { createCharacter, updateCharacter, updateHelper } from './characters.js';
 import { advanceMatrixEffect, startMatrixEffect } from './matrixEffectState.js';
 import { createPet, updatePet } from './petEntity.js';
 import { anchorTile, closestFreeSeat } from './seatPlacement.js';
@@ -924,15 +925,51 @@ export class OfficeState {
     }
   }
 
-  /** Start an agent at rest: not working, and seated for a usual rest when it has a chair
-   *  (then it gets up and wanders); without one it stands at once. */
+  /** Start an agent at rest: not working, and seated for a moment when it has a chair
+   *  (then it gets up for its break); without one it stands at once. */
   restAgent(id: number): void {
     const ch = this.characters.get(id);
     if (!ch) return;
     ch.isActive = false;
-    if (ch.seatId && ch.state === CharacterState.TYPE) restInChair(ch);
-    else ch.seatTimer = 0;
+    ch.seatTimer =
+      ch.seatId && ch.state === CharacterState.TYPE
+        ? INACTIVE_SEAT_TIMER_MIN_SEC + Math.random() * INACTIVE_SEAT_TIMER_RANGE_SEC
+        : 0;
     this.rebuildFurnitureInstances();
+  }
+
+  /**
+   * A seat in the break room for an idle agent to rest on, and the way there:
+   * a seat with no PC (a sofa, a lounge chair; see workstations.ts) that is no
+   * agent's own and no one else rests on. Null when none is free and
+   * reachable — the agent then rests in its own chair.
+   */
+  private breakRoomSeat(ch: Character): BreakRoomSeat | null {
+    const resting = new Set<string>();
+    for (const other of this.characters.values()) {
+      if (other.restSeatId) resting.add(other.restSeatId);
+    }
+    const free = [...this.seats].filter(
+      ([uid, seat]) => !seat.assigned && !this.seatWorkstations.has(uid) && !resting.has(uid),
+    );
+    // In random order, the first one there is a way to. Seat tiles are blocked
+    // for everyone but their owner, so unblock this one for the search.
+    while (free.length > 0) {
+      const [seatId, seat] = free.splice(Math.floor(Math.random() * free.length), 1)[0];
+      const key = `${seat.seatCol},${seat.seatRow}`;
+      const wasBlocked = this.blockedTiles.delete(key);
+      const path = findPath(
+        ch.tileCol,
+        ch.tileRow,
+        seat.seatCol,
+        seat.seatRow,
+        this.tileMap,
+        this.blockedTiles,
+      );
+      if (wasBlocked) this.blockedTiles.add(key);
+      if (path.length > 0) return { seatId, path };
+    }
+    return null;
   }
 
   /**
@@ -1240,7 +1277,15 @@ export class OfficeState {
       } else {
         // Temporarily unblock own seat so character can pathfind to it
         this.withOwnSeatUnblocked(ch, () =>
-          updateCharacter(ch, dt, this.walkableTiles, this.seats, this.tileMap, this.blockedTiles),
+          updateCharacter(
+            ch,
+            dt,
+            this.walkableTiles,
+            this.seats,
+            this.tileMap,
+            this.blockedTiles,
+            () => this.breakRoomSeat(ch),
+          ),
         );
       }
 

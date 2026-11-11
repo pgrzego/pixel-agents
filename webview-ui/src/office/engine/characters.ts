@@ -79,6 +79,7 @@ export function createCharacter(
     wanderLimit: randomInt(WANDER_MOVES_BEFORE_REST_MIN, WANDER_MOVES_BEFORE_REST_MAX),
     isActive: true,
     seatId,
+    restSeatId: null,
     bubbleType: null,
     bubbleTimer: 0,
     seatTimer: 0,
@@ -94,6 +95,9 @@ export function createCharacter(
   };
 }
 
+/** A break-room seat to rest on, and the way there (OfficeState.breakRoomSeat). */
+export type BreakRoomSeat = { seatId: string; path: Tile[] };
+
 export function updateCharacter(
   ch: Character,
   dt: number,
@@ -101,8 +105,16 @@ export function updateCharacter(
   seats: Map<string, Seat>,
   tileMap: TileTypeVal[][],
   blockedTiles: Set<string>,
+  breakRoom: () => BreakRoomSeat | null,
 ): void {
   ch.frameTimer += dt;
+
+  // Called back to work during a break: the break-room seat is no longer its
+  // own, and sitting there it gets up first (IDLE then walks it to its desk).
+  if (ch.isActive && ch.restSeatId) {
+    ch.restSeatId = null;
+    if (ch.state === CharacterState.TYPE) ch.state = CharacterState.IDLE;
+  }
 
   switch (ch.state) {
     case CharacterState.TYPE: {
@@ -112,15 +124,21 @@ export function updateCharacter(
       }
       // If no longer active, stand up and start wandering (after seatTimer expires)
       if (!ch.isActive) {
-        if (ch.seatTimer > 0) {
+        // A break-room seat that became an agent's own seat (a newcomer took
+        // it) is no longer free to rest on: get up and off it at once.
+        const restSeatTaken = ch.restSeatId !== null && seats.get(ch.restSeatId)?.assigned;
+        if (ch.seatTimer > 0 && !restSeatTaken) {
           ch.seatTimer -= dt;
           break;
         }
         ch.seatTimer = 0; // clear sentinel
+        ch.restSeatId = null;
         ch.state = CharacterState.IDLE;
         ch.frame = 0;
         ch.frameTimer = 0;
-        ch.wanderTimer = randomRange(WANDER_PAUSE_MIN_SEC, WANDER_PAUSE_MAX_SEC);
+        ch.wanderTimer = restSeatTaken
+          ? 0
+          : randomRange(WANDER_PAUSE_MIN_SEC, WANDER_PAUSE_MAX_SEC);
         ch.wanderCount = 0;
         ch.wanderLimit = randomInt(WANDER_MOVES_BEFORE_REST_MIN, WANDER_MOVES_BEFORE_REST_MAX);
       }
@@ -169,7 +187,18 @@ export function updateCharacter(
       // Countdown wander timer
       ch.wanderTimer -= dt;
       if (ch.wanderTimer <= 0) {
-        // Check if we've wandered enough — return to seat for a rest
+        // Wandered enough — rest: in the break room when a seat there is free,
+        // else in its own chair
+        const rest = ch.wanderCount >= ch.wanderLimit ? breakRoom() : null;
+        if (rest) {
+          ch.restSeatId = rest.seatId;
+          ch.path = rest.path;
+          ch.moveProgress = 0;
+          ch.state = CharacterState.WALK;
+          ch.frame = 0;
+          ch.frameTimer = 0;
+          break;
+        }
         if (ch.wanderCount >= ch.wanderLimit && ch.seatId) {
           const seat = seats.get(ch.seatId);
           if (seat) {
@@ -242,28 +271,26 @@ export function updateCharacter(
             }
           }
         } else {
-          // Check if arrived at assigned seat — sit down for a rest before wandering again
-          if (ch.seatId) {
-            const seat = seats.get(ch.seatId);
-            if (seat && ch.tileCol === seat.seatCol && ch.tileRow === seat.seatRow) {
-              ch.state = CharacterState.TYPE;
-              ch.dir = seat.facingDir;
-              // seatTimer < 0 is a sentinel from setAgentActive(false) meaning
-              // "turn just ended" — skip the long rest so idle transition is immediate
-              if (ch.seatTimer < 0) {
-                ch.seatTimer = 0;
-              } else {
-                restInChair(ch);
-              }
-              ch.wanderCount = 0;
-              ch.wanderLimit = randomInt(
-                WANDER_MOVES_BEFORE_REST_MIN,
-                WANDER_MOVES_BEFORE_REST_MAX,
-              );
-              ch.frame = 0;
-              ch.frameTimer = 0;
-              break;
+          // Arrived at a seat to rest on — the break-room seat it came for, or
+          // its own — sit down for a rest before wandering again
+          const restSeat = seatHere(ch, seats, ch.restSeatId);
+          if (!restSeat) ch.restSeatId = null;
+          const seat = restSeat ?? seatHere(ch, seats, ch.seatId);
+          if (seat) {
+            ch.state = CharacterState.TYPE;
+            ch.dir = seat.facingDir;
+            // seatTimer < 0 is a sentinel from setAgentActive(false) meaning
+            // "turn just ended" — skip the long rest so idle transition is immediate
+            if (ch.seatTimer < 0) {
+              ch.seatTimer = 0;
+            } else {
+              restInChair(ch);
             }
+            ch.wanderCount = 0;
+            ch.wanderLimit = randomInt(WANDER_MOVES_BEFORE_REST_MIN, WANDER_MOVES_BEFORE_REST_MAX);
+            ch.frame = 0;
+            ch.frameTimer = 0;
+            break;
           }
           ch.state = CharacterState.IDLE;
           ch.wanderTimer = randomRange(WANDER_PAUSE_MIN_SEC, WANDER_PAUSE_MAX_SEC);
@@ -325,6 +352,12 @@ function stepAlongPath(ch: Character, dt: number): void {
 }
 
 type Tile = { col: number; row: number };
+
+/** The seat `id` names, when the character is on it. */
+function seatHere(ch: Character, seats: Map<string, Seat>, id: string | null): Seat | undefined {
+  const seat = id ? seats.get(id) : undefined;
+  return seat && seat.seatCol === ch.tileCol && seat.seatRow === ch.tileRow ? seat : undefined;
+}
 
 /** Tiles between two tiles, counting diagonals as one step. */
 function tileDistance(a: Tile, b: Tile): number {
@@ -442,7 +475,7 @@ export function getCharacterSprite(ch: Character, sprites: CharacterSprites): Sp
 }
 
 /** Sit out a usual rest in the chair before standing up to wander. */
-export function restInChair(ch: Character): void {
+function restInChair(ch: Character): void {
   ch.seatTimer = randomRange(SEAT_REST_MIN_SEC, SEAT_REST_MAX_SEC);
 }
 
