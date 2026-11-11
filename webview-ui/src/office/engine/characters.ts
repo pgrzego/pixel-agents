@@ -122,7 +122,7 @@ export function updateCharacter(
         ch.frameTimer -= TYPE_FRAME_DURATION_SEC;
         ch.frame = (ch.frame + 1) % 2;
       }
-      // If no longer active, stand up and start wandering (after seatTimer expires)
+      // No longer active: it gets up once its rest (if any) is over
       if (!ch.isActive) {
         // A break-room seat that became an agent's own seat (a newcomer took
         // it) is no longer free to rest on: get up and off it at once.
@@ -131,16 +131,29 @@ export function updateCharacter(
           ch.seatTimer -= dt;
           break;
         }
+        // Idle time is spent in the break room: up from its desk (its turn
+        // over, or a rest there) it heads for a free seat in it, and after a
+        // rest in it moves to another one, or stays put when none is free.
+        const rest = breakRoom();
+        if (!rest && ch.restSeatId && !restSeatTaken) {
+          restInChair(ch);
+          break;
+        }
         ch.seatTimer = 0; // clear sentinel
         ch.restSeatId = null;
-        ch.state = CharacterState.IDLE;
         ch.frame = 0;
         ch.frameTimer = 0;
-        ch.wanderTimer = restSeatTaken
-          ? 0
-          : randomRange(WANDER_PAUSE_MIN_SEC, WANDER_PAUSE_MAX_SEC);
         ch.wanderCount = 0;
         ch.wanderLimit = randomInt(WANDER_MOVES_BEFORE_REST_MIN, WANDER_MOVES_BEFORE_REST_MAX);
+        if (rest) {
+          walkToRest(ch, rest);
+        } else {
+          // No free seat there: wander, then rest in its own chair
+          ch.state = CharacterState.IDLE;
+          ch.wanderTimer = restSeatTaken
+            ? 0
+            : randomRange(WANDER_PAUSE_MIN_SEC, WANDER_PAUSE_MAX_SEC);
+        }
       }
       break;
     }
@@ -187,16 +200,11 @@ export function updateCharacter(
       // Countdown wander timer
       ch.wanderTimer -= dt;
       if (ch.wanderTimer <= 0) {
-        // Wandered enough — rest: in the break room when a seat there is free,
-        // else in its own chair
-        const rest = ch.wanderCount >= ch.wanderLimit ? breakRoom() : null;
+        // To the break room whenever a seat there is free; only while none is
+        // does it wander, resting in its own chair after enough moves
+        const rest = breakRoom();
         if (rest) {
-          ch.restSeatId = rest.seatId;
-          ch.path = rest.path;
-          ch.moveProgress = 0;
-          ch.state = CharacterState.WALK;
-          ch.frame = 0;
-          ch.frameTimer = 0;
+          walkToRest(ch, rest);
           break;
         }
         if (ch.wanderCount >= ch.wanderLimit && ch.seatId) {
@@ -272,7 +280,7 @@ export function updateCharacter(
           }
         } else {
           // Arrived at a seat to rest on — the break-room seat it came for, or
-          // its own — sit down for a rest before wandering again
+          // its own — sit down for a rest
           const restSeat = seatHere(ch, seats, ch.restSeatId);
           if (!restSeat) ch.restSeatId = null;
           const seat = restSeat ?? seatHere(ch, seats, ch.seatId);
@@ -474,9 +482,19 @@ export function getCharacterSprite(ch: Character, sprites: CharacterSprites): Sp
   }
 }
 
-/** Sit out a usual rest in the chair before standing up to wander. */
+/** Sit out a usual rest in the chair it is in. */
 function restInChair(ch: Character): void {
   ch.seatTimer = randomRange(SEAT_REST_MIN_SEC, SEAT_REST_MAX_SEC);
+}
+
+/** Set off for a break-room seat to rest on. */
+function walkToRest(ch: Character, rest: BreakRoomSeat): void {
+  ch.restSeatId = rest.seatId;
+  ch.path = rest.path;
+  ch.moveProgress = 0;
+  ch.state = CharacterState.WALK;
+  ch.frame = 0;
+  ch.frameTimer = 0;
 }
 
 function randomRange(min: number, max: number): number {
