@@ -121,15 +121,19 @@ test('an idle agent rests in the break room, not at its desk, and goes back to w
   os.addAgent(1, undefined, undefined, 'a', true);
   const ch = os.characters.get(1)!;
 
-  // Its turn ends: it stands up; once it has wandered enough, it goes for a rest.
+  // Its turn ends: it gets up and goes straight to the break room.
   os.setAgentActive(1, false);
-  run(os, 0.1);
-  ch.wanderCount = ch.wanderLimit;
-  ch.wanderTimer = 0;
   run(os, 5);
   assert.equal(ch.restSeatId, 'b');
   assert.deepEqual([ch.tileCol, ch.tileRow, ch.state], [5, 4, CharacterState.TYPE]);
   assert.equal(getCharacterSprite(ch, sprites), sprites.seated[ch.dir]);
+
+  // Its rest over, with no other seat free there it stays put for another one.
+  ch.seatTimer = 0;
+  run(os, 1);
+  assert.equal(ch.restSeatId, 'b');
+  assert.deepEqual([ch.tileCol, ch.tileRow, ch.state], [5, 4, CharacterState.TYPE]);
+  assert.ok(ch.seatTimer > 0, 'resting again');
 
   // A newcomer needs a chair and 'b' is the only free one: it is the newcomer's
   // own now, so the resting agent gets up and walks off it.
@@ -144,4 +148,40 @@ test('an idle agent rests in the break room, not at its desk, and goes back to w
   run(os, 5);
   assert.equal(ch.restSeatId, null);
   assert.deepEqual([ch.tileCol, ch.tileRow, ch.state], [1, 1, CharacterState.TYPE]);
+});
+
+test('its rest over, an agent in the break room moves to another free seat there', () => {
+  const layout = layoutWithChair();
+  layout.furniture.push(
+    { uid: 'b', type: 'TEST_CHAIR', col: 5, row: 4 },
+    { uid: 'c', type: 'TEST_CHAIR', col: 6, row: 1 },
+  );
+  const os = new OfficeState(layout);
+  os.addAgent(1, undefined, undefined, 'a', true);
+  const ch = os.characters.get(1)!;
+  os.setAgentActive(1, false);
+  run(os, 5);
+  const first = ch.restSeatId;
+  assert.ok(first === 'b' || first === 'c', `resting in the break room, not on ${first}`);
+
+  ch.seatTimer = 0;
+  run(os, 5);
+  assert.equal(ch.restSeatId, first === 'b' ? 'c' : 'b');
+  assert.equal(ch.state, CharacterState.TYPE);
+});
+
+test('an idle agent standing about heads for the break room at once, not after wandering', () => {
+  const layout = layoutWithChair();
+  layout.furniture.push({ uid: 'b', type: 'TEST_CHAIR', col: 5, row: 4 });
+  const os = new OfficeState(layout);
+  os.addAgent(1, undefined, undefined, 'a', true);
+  const ch = os.characters.get(1)!;
+  // As when its turn ends on the way to its desk: standing, no moves made yet.
+  ch.isActive = false;
+  ch.state = CharacterState.IDLE;
+  ch.wanderCount = 0;
+  ch.wanderTimer = 0;
+  run(os, 5);
+  assert.equal(ch.restSeatId, 'b');
+  assert.deepEqual([ch.tileCol, ch.tileRow, ch.state], [5, 4, CharacterState.TYPE]);
 });

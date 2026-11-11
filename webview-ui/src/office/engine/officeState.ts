@@ -941,8 +941,10 @@ export class OfficeState {
   /**
    * A seat in the break room for an idle agent to rest on, and the way there:
    * a seat with no PC (a sofa, a lounge chair; see workstations.ts) that is no
-   * agent's own and no one else rests on. Null when none is free and
-   * reachable — the agent then rests in its own chair.
+   * agent's own and no one rests on (the asking agent's own rest seat
+   * included, so after a rest there it moves on). Null when none is free and
+   * reachable: the agent then wanders and rests in its own chair, or, resting
+   * in the break room already, stays put.
    */
   private breakRoomSeat(ch: Character): BreakRoomSeat | null {
     const resting = new Set<string>();
